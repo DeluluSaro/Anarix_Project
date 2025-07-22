@@ -27,7 +27,7 @@ st.title('Chat with your SQL DB Dynamically!!')
 with st.sidebar:
     api_key = st.text_input(label='Groq API Key', type='password')
     if not api_key:
-        st.info('Please add the Groq API Key')
+        st.info('Please add the Groq API Key (make sure there is no single quotes with api key)')
         st.stop()
     
     st.markdown("### Visualization Options")
