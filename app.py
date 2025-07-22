@@ -10,17 +10,17 @@ from langchain.agents.agent_types import AgentType
 from langchain_community.callbacks.streamlit import StreamlitCallbackHandler
 import re
 
-# --- Streamlit Setup ---
+
 st.set_page_config(page_title="Chat with SQL DB", page_icon='💻')
 st.title('Chat with your SQL DB Dynamically!!')
 
-# --- API Key Sidebar ---
+
 api_key = st.sidebar.text_input(label='Groq API Key', type='password')
 if not api_key:
     st.info('Please add the Groq API Key')
     st.stop()
 
-# --- Database Setup ---
+
 dbfilepath = (Path(__file__).parent / 'pr_report.db').absolute()
 llm = ChatGroq(groq_api_key=api_key, model_name='Llama3-8b-8192', streaming=True)
 db = SQLDatabase(create_engine(f'sqlite:///{dbfilepath}'))
@@ -34,14 +34,14 @@ agent = create_sql_agent(
     agent_type=AgentType.ZERO_SHOT_REACT_DESCRIPTION
 )
 
-# --- Session State Setup ---
+
 if 'messages' not in st.session_state or st.sidebar.button('Clear message history'):
     st.session_state['messages'] = [{'role': 'assistant', 'content': 'How can I help you?'}]
 
 for msg in st.session_state.messages:
     st.chat_message(msg['role']).write(msg['content'])
 
-# --- User Query ---
+
 user_query = st.chat_input(placeholder='Ask anything from the database')
 if user_query:
     st.session_state.messages.append({'role': 'user', 'content': user_query})
@@ -53,7 +53,7 @@ if user_query:
         st.session_state.messages.append({'role': 'assistant', 'content': response})
         st.write(response)
 
-        # --- SQL Extraction Logic ---
+    
         sql_query = None
         match_blocks = [
             re.search(r"```sql\n(.*?)```", response, re.DOTALL),
@@ -65,7 +65,7 @@ if user_query:
                 sql_query = match.group(1).strip() if match.lastindex else match.group(0).strip()
                 break
 
-        # --- SQL Execution and Visualization ---
+        
         if sql_query:
             if sql_query.endswith(';'):
                 sql_query = sql_query[:-1]
@@ -91,7 +91,6 @@ if user_query:
             except Exception as e:
                 st.error(f"Error executing SQL or generating visualization: {e}")
 
-        # --- Fallback: Visualize Text Response Like "Product ID X with Y purchases" ---
         else:
             matches = re.findall(r"Product ID\s*(\d+)\s*with\s*(\d+)\s*purchases", response)
             if matches:
