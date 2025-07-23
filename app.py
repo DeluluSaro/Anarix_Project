@@ -43,7 +43,7 @@ with st.sidebar:
 
 # Initialize components
 dbfilepath = (Path(__file__).parent / 'pr_report.db').absolute()
-llm = ChatGroq(groq_api_key=api_key, model_name='Llama3-8b-8192', streaming=True)
+llm = ChatGroq(groq_api_key=api_key, model_name='llama-3.3-70b-versatile', streaming=True)
 db = SQLDatabase(create_engine(f'sqlite:///{dbfilepath}'))
 toolkit = SQLDatabaseToolkit(db=db, llm=llm)
 
@@ -261,6 +261,77 @@ def extract_sql_from_response(response):
     return sql_query
 
 def extract_structured_data_from_response(response):
+    """Extract structured data from various text response formats"""
+    
+    # Pattern 1: Tuple/List data like [('2025-06-13', 21, 46654.18), ...]
+    tuple_pattern = r"\[\s*(?:\([^)]+\),?\s*)+\]"
+    tuple_match = re.search(tuple_pattern, response)
+    
+    if tuple_match:
+        try:
+            import ast
+            data_str = tuple_match.group(0)
+            data_list = ast.literal_eval(data_str)
+
+            if data_list and isinstance(data_list[0], tuple):
+                sample_row = data_list[0]
+
+                # Handle duplicate column names using a counter
+                name_count = {}
+
+                def unique_name(base):
+                    count = name_count.get(base, 0) + 1
+                    name_count[base] = count
+                    return f"{base}_{count}" if count > 1 else base
+
+                columns = []
+                for val in sample_row:
+                    if isinstance(val, str) and '-' in val and len(val) == 10:
+                        columns.append(unique_name("Date"))
+                    elif isinstance(val, (int, float)) and val > 1000:
+                        columns.append(unique_name("Amount"))
+                    elif isinstance(val, (int, float)) and val < 1000:
+                        columns.append(unique_name("ID/Count"))
+                    else:
+                        columns.append(unique_name("Column"))
+
+                # Special case: rename if known pattern like top product sales
+                if "top" in response.lower() and "product" in response.lower():
+                    if len(columns) >= 2:
+                        columns[0] = unique_name("Product_Info")
+                        columns[-1] = unique_name("Sales_Amount")
+
+                df = pd.DataFrame(data_list, columns=columns)
+                return df
+        except:
+            pass
+
+    # Pattern 2: Key-value style
+    kv_patterns = [
+        r"Product ID\s*(\d+)\s*with\s*(\d+)\s*purchases",
+        r"Product\s*(\w+)[:\s]*(\d+\.?\d*)",
+        r"Customer\s*(\w+)[:\s]*(\d+\.?\d*)",
+        r"(\w+)[:\s]*(\d+\.?\d*)",
+    ]
+    
+    for pattern in kv_patterns:
+        matches = re.findall(pattern, response, re.IGNORECASE)
+        if matches and len(matches) > 2:
+            df = pd.DataFrame(matches, columns=["Item", "Value"])
+            df["Value"] = pd.to_numeric(df["Value"], errors='coerce')
+            return df
+
+    # Pattern 3: Simple number list
+    number_list_pattern = r"\[(\d+(?:\.\d+)?(?:,\s*\d+(?:\.\d+)?)*)\]"
+    number_match = re.search(number_list_pattern, response)
+    
+    if number_match:
+        numbers = [float(x.strip()) for x in number_match.group(1).split(',')]
+        df = pd.DataFrame({"Index": range(len(numbers)), "Value": numbers})
+        return df
+       
+    return None
+
     """Extract structured data from various text response formats"""
     
     # Pattern 1: Tuple/List data like [('2025-06-13', 21, 46654.18), ...]
